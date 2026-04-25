@@ -14,7 +14,8 @@ on:
         required: true
         type: choice
         options:
-          - IPQ60XX-WIFI-YES
+          - IPQ60XX-WIFI-YES-RE-CS-02
+          - IPQ60XX-WIFI-YES-RE-SS-01
           - IPQ60XX-WIFI-NO
           - IPQ807X-WIFI-YES
           - IPQ807X-WIFI-NO
