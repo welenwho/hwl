@@ -1,0 +1,16 @@
+#设备平台
+CONFIG_TARGET_qualcommax=y
+CONFIG_TARGET_qualcommax_ipq60xx=y
+#设备列表
+CONFIG_TARGET_DEVICE_qualcommax_ipq60xx_DEVICE_jdcloud_re-cs-02=y
+#雅典娜 5.2GHz 开关。5.2GHz 是 QCN9074；2.4GHz 与 5.8GHz 是 IPQ6018。
+# ATHENA_QCN9074=n  双频，不编入 9074，固件看不到这路 wifi。
+# ATHENA_QCN9074=y  三频，编入 9074 驱动。
+# 手动编译可用工作流输入 ATHENA_QCN9074 覆盖这一行。
+# ATHENA_QCN9074=n
+#定制插件
+CONFIG_PACKAGE_luci-app-banip=y
+CONFIG_PACKAGE_luci-app-ksmbd=y
+CONFIG_PACKAGE_luci-app-nft-timecontrol=y
+CONFIG_PACKAGE_luci-app-nlbwmon=y
+CONFIG_PACKAGE_luci-app-msd_lite=y

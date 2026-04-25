@@ -44,6 +44,10 @@ on:
         required: false
         default: false
         type: boolean
+      WRT_ATHENA_QCN9074:
+        required: false
+        default: ""
+        type: string
 
 env:
   GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
@@ -59,6 +63,7 @@ env:
   WRT_SOURCE: ${{inputs.WRT_SOURCE}}
   WRT_PACKAGE: ${{inputs.WRT_PACKAGE}}
   WRT_TEST: ${{inputs.WRT_TEST}}
+  WRT_ATHENA_QCN9074: ${{inputs.WRT_ATHENA_QCN9074}}
 
 jobs:
   core:
@@ -272,7 +277,11 @@ jobs:
             for FILE in $(find ./bin/targets/ -type f -iname "*$WRT_TARGET*") ; do
               EXT=$(basename $FILE | cut -d '.' -f 2-)
               NAME=$(basename $FILE | cut -d '.' -f 1 | grep -io "\($WRT_TARGET\).*")
-              NEW_FILE="$NAME"-"$WRT_INFO"-"$WRT_BRANCH"-"$WRT_WIFI"-"$WRT_DATE"."$EXT"
+              QCN_MARK=""
+              if [ -n "${WRT_QCN9074:-}" ]; then
+                QCN_MARK="-QCN9074-${WRT_QCN9074}"
+              fi
+              NEW_FILE="$NAME"-"$WRT_INFO"-"$WRT_BRANCH"-"$WRT_WIFI""$QCN_MARK"-"$WRT_DATE"."$EXT"
               mv -f $FILE ./upload/$NEW_FILE
             done
 
@@ -299,6 +308,8 @@ jobs:
 
             配置：${{env.WRT_CONFIG}}
             平台：${{env.WRT_TARGET}}
+            ${{ env.WRT_QCN9074 == 'y' && '雅典娜 WiFi：三频，含 5.2GHz QCN9074' || '' }}
+            ${{ env.WRT_QCN9074 == 'n' && '雅典娜 WiFi：双频 2.4GHz + 5.8GHz，无 QCN9074' || '' }}
 
             登录地址：${{env.WRT_IP}}
             登录密码：${{env.WRT_PW}}

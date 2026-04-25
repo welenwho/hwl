@@ -52,3 +52,8 @@ if [[ "${WRT_TARGET^^}" == *"QUALCOMMAX"* ]]; then
 		echo "qualcommax set up nowifi successfully!"
 	fi
 fi
+
+#雅典娜 QCN9074 开关：配置文件 ATHENA_QCN9074，编译时可用 WRT_ATHENA_QCN9074 覆盖
+if [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/Scripts/Athena-52g.sh" ]; then
+	bash "$GITHUB_WORKSPACE/Scripts/Athena-52g.sh"
+fi
