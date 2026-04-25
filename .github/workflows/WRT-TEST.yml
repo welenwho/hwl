@@ -14,24 +14,17 @@ on:
         required: true
         type: choice
         options:
-          - AIROHA
           - IPQ53XX
-          - IPQ60XX-WIFI-NO
-          - IPQ60XX-WIFI-YES
-          - IPQ807X-WIFI-NO
-          - IPQ807X-WIFI-YES
-          - IPQ95XX
-          - MEDIATEK-WIFI-NO
-          - MEDIATEK-WIFI-YES
-          - ROCKCHIP
-          - X86
-          - TEST
+          - IPQ53XX-WIFI-NO
+          - IPQ53XX-WIFI-NO
+          - IPQ60XX-WIFI-YES-RE-CS-02
+          - IPQ60XX-WIFI-YES-RE-SS-01
       SOURCE:
         default: 'VIKINGYFY/immortalwrt'
         required: true
         type: choice
         options:
-          - VIKINGYFY/immortalwrt
+          - welenwho/immortalwrt
           - immortalwrt/immortalwrt
       BRANCH:
         default: 'owrt'
