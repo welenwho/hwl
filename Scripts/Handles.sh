@@ -221,48 +221,6 @@ if [ -d "$PKG_PATH/luci-app-aurora-config" ]; then
 	fi
 fi
 
-#修复Tailscale日志页ACL
-TS_ACL_FILE="$(find "$PKG_PATH" -maxdepth 8 -type f \
-	-wholename '*/luci-app-tailscale/root/usr/share/rpcd/acl.d/luci-app-tailscale.json' \
-	-print -quit 2>/dev/null)"
-if [ -f "$TS_ACL_FILE" ]; then
-	echo " "
-
-	TS_ACL_TMP="${TS_ACL_FILE}.tmp.$$"
-	if jq '
-		.["luci-app-tailscale"].read.file["/usr/sbin/logread -e tailscale"] = [ "exec" ] |
-		.["luci-app-tailscale"].read.file["/usr/libexec/logread-ubox -e tailscale"] = [ "exec" ] |
-		.["luci-app-tailscale"].read.ubus.file = [ "stat" ]
-	' "$TS_ACL_FILE" > "$TS_ACL_TMP" && mv -f "$TS_ACL_TMP" "$TS_ACL_FILE"; then
-		echo "tailscale LuCI ACL has been fixed!"
-	else
-		rm -f "$TS_ACL_TMP"
-		echo "tailscale LuCI ACL fix failed; continuing!"
-	fi
-fi
-
-# 修复 Tailscale LuCI 生成过宽的 100.0.0.0/8 接口路由
-TS_HELPER_FILE="$(find "$PKG_PATH" -maxdepth 8 -type f \
-	-wholename '*/luci-app-tailscale/root/usr/sbin/tailscale_helper' \
-	-print -quit 2>/dev/null)"
-if [ -f "$TS_HELPER_FILE" ]; then
-	echo " "
-
-	if grep -Fq "set network.tailscale.netmask='255.0.0.0'" "$TS_HELPER_FILE"; then
-		if sed -i "s/set network\.tailscale\.netmask='255\.0\.0\.0'/set network.tailscale.netmask='255.192.0.0'/g" \
-			"$TS_HELPER_FILE" &&
-			grep -Fq "set network.tailscale.netmask='255.192.0.0'" "$TS_HELPER_FILE"; then
-			echo "tailscale interface netmask has been fixed!"
-		else
-			echo "tailscale interface netmask fix failed; continuing!"
-		fi
-	elif grep -Fq "set network.tailscale.netmask='255.192.0.0'" "$TS_HELPER_FILE"; then
-		echo "tailscale interface netmask is already correct!"
-	else
-		echo "tailscale interface netmask assignment was not found; continuing!"
-	fi
-fi
-
 #修复Tailscale配置文件冲突
 FEEDS_PACKAGES="$PKG_PATH/../feeds/packages"
 TS_FILE="$(find "$FEEDS_PACKAGES" -maxdepth 3 -type f -wholename '*/tailscale/Makefile' -print -quit 2>/dev/null)"
