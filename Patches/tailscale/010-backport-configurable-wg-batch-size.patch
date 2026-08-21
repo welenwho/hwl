@@ -1,0 +1,86 @@
+From 0d66cde14f699b9de73d60956b532e78a10535db Mon Sep 17 00:00:00 2001
+From: James Tucker <james@tailscale.com>
+Date: Mon, 10 Aug 2026 18:14:35 -0700
+Subject: [PATCH] net: make the Linux WireGuard batch size configurable
+
+Backport the production changes from upstream commit 0d66cde14f699b9d.
+The Linux default of 128 pins roughly 32 MiB of packet buffers. Expose the
+upstream TS_DEBUG_WG_BATCH_SIZE knob so memory-constrained OpenWrt systems can
+select a smaller value without carrying a wireguard-go fork.
+
+Upstream-Status: Backport [0d66cde14f699b9de73d60956b532e78a10535db]
+Signed-off-by: welenwho/packages contributors
+---
+ net/batching/conn.go            | 17 +++++++++++++++++
+ net/tstun/wrap.go               |  3 ++-
+ wgengine/magicsock/magicsock.go |  2 +-
+ 3 files changed, 20 insertions(+), 2 deletions(-)
+
+diff --git a/net/batching/conn.go b/net/batching/conn.go
+index 1843a2c..dfe4476 100644
+--- a/net/batching/conn.go
++++ b/net/batching/conn.go
+@@ -9,10 +9,27 @@ import (
+ 
+ 	"golang.org/x/net/ipv4"
+ 	"golang.org/x/net/ipv6"
++	"tailscale.com/envknob"
+ 	"tailscale.com/net/packet"
+ 	"tailscale.com/types/nettype"
+ )
+ 
++// BatchSizeFromEnv returns ideal, unless the TS_DEBUG_WG_BATCH_SIZE
++// environment variable is set to a positive integer, in which case it returns
++// that value clamped to [1, ideal].
++//
++// Batch size determines how much packet memory wireguard-go pins per reader
++// goroutine (batch size x 64 KiB message buffers per reader, ~32 MiB total at
++// the Linux default of 128), so memory-budget tests set the env var to 1 to
++// approximate the configuration used on memory-constrained (mobile)
++// platforms, where batch size is always 1.
++func BatchSizeFromEnv(ideal int) int {
++	if v, ok := envknob.LookupInt("TS_DEBUG_WG_BATCH_SIZE"); ok && v > 0 {
++		return min(v, ideal)
++	}
++	return ideal
++}
++
+ var (
+ 	// This acts as a compile-time check for our usage of ipv6.Message in
+ 	// [Conn] for both IPv6 and IPv4 operations.
+diff --git a/net/tstun/wrap.go b/net/tstun/wrap.go
+index e63dccd..c77ce95 100644
+--- a/net/tstun/wrap.go
++++ b/net/tstun/wrap.go
+@@ -25,6 +25,7 @@ import (
+ 	"tailscale.com/envknob"
+ 	"tailscale.com/feature"
+ 	"tailscale.com/feature/buildfeatures"
++	"tailscale.com/net/batching"
+ 	"tailscale.com/net/packet"
+ 	"tailscale.com/net/packet/checksum"
+ 	"tailscale.com/net/routemanager"
+@@ -1487,7 +1488,7 @@ func (t *Wrapper) BatchSize() int {
+ 		// Linux, and we cannot make a determination on gVisor usage at
+ 		// wireguard-go.Device startup, which is when this value matters for
+ 		// packet memory init.
+-		return conn.IdealBatchSize
++		return batching.BatchSizeFromEnv(conn.IdealBatchSize)
+ 	}
+ 	return t.tdev.BatchSize()
+ }
+diff --git a/wgengine/magicsock/magicsock.go b/wgengine/magicsock/magicsock.go
+index 8b0ee24..d7d3f9a 100644
+--- a/wgengine/magicsock/magicsock.go
++++ b/wgengine/magicsock/magicsock.go
+@@ -3481,7 +3481,7 @@ func (c *connBind) BatchSize() int {
+ 	// TODO(raggi): determine by properties rather than hardcoding platform behavior
+ 	switch runtime.GOOS {
+ 	case "linux":
+-		return conn.IdealBatchSize
++		return batching.BatchSizeFromEnv(conn.IdealBatchSize)
+ 	default:
+ 		return 1
+ 	}
+-- 
+2.51.0
