@@ -34,39 +34,7 @@ if [ -d "$PKG_PATH/luci-app-aurora-config" ]; then
 	fi
 fi
 
-#修复Tailscale配置文件冲突，并为1.102.2回移可调WireGuard批量大小
 FEEDS_PACKAGES="$PKG_PATH/../feeds/packages"
-TS_FILE="$(find "$FEEDS_PACKAGES" -maxdepth 3 -type f -wholename '*/tailscale/Makefile' -print -quit 2>/dev/null)"
-if [ -f "$TS_FILE" ]; then
-	TS_DIR="${TS_FILE%/Makefile}"
-	TS_VERSION="$(sed -n 's/^PKG_VERSION:=//p' "$TS_FILE" | head -n 1)"
-	TS_BATCH_PATCH_SOURCE="$PROJECT_ROOT/Patches/tailscale/010-backport-configurable-wg-batch-size.patch"
-	TS_BATCH_PATCH_TARGET="$TS_DIR/patches/010-backport-configurable-wg-batch-size.patch"
-	echo " "
-
-	if sed -i '/\/files/d' "$TS_FILE"; then
-		echo "tailscale has been fixed!"
-	else
-		echo "tailscale fix failed; continuing!"
-	fi
-
-	if [ "$TS_VERSION" = "1.102.2" ]; then
-		if [ ! -f "$TS_BATCH_PATCH_SOURCE" ]; then
-			echo "tailscale batch-size backport is missing!"
-			exit 1
-		fi
-		if mkdir -p "$TS_DIR/patches" &&
-			cp "$TS_BATCH_PATCH_SOURCE" "$TS_BATCH_PATCH_TARGET" &&
-			sed -i 's/^PKG_RELEASE:=1$/PKG_RELEASE:=2/' "$TS_FILE"; then
-			echo "tailscale 1.102.2 batch-size backport has been installed!"
-		else
-			echo "tailscale batch-size backport installation failed!"
-			exit 1
-		fi
-	else
-		echo "tailscale $TS_VERSION does not require the 1.102.2 batch-size backport."
-	fi
-fi
 
 #修复Rust编译失败
 RUST_FILE="$(find "$FEEDS_PACKAGES" -maxdepth 3 -type f -wholename '*/rust/Makefile' -print -quit 2>/dev/null)"
