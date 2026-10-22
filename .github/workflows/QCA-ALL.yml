@@ -30,14 +30,14 @@ permissions: write-all
 #CI任务
 jobs:
   config:
-    name: ${{matrix.CONFIG}}
+    name: ${{matrix.CONFIG}}-${{matrix.BRANCH}}
     strategy:
       fail-fast: false
       #max-parallel: 3
       matrix:
         CONFIG: [IPQ60XX-WIFI-YES-RE-CS-02, IPQ60XX-WIFI-YES-RE-SS-01, IPQ807X-WIFI-YES, IPQ60XX-WIFI-NO]
         SOURCE: [welenwho/immortalwrt]
-        BRANCH: [main]
+        BRANCH: [main, owrt]
 
     #调用公用编译核心WRT-CORE.yml
     uses: ./.github/workflows/WRT-CORE.yml
