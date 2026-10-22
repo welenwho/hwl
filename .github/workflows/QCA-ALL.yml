@@ -23,6 +23,15 @@ on:
         default: false
         required: false
         type: boolean
+      ATHENA_QCN9074:
+        description: '雅典娜 5.2GHz QCN9074。default=按配置文件。y=三频。n=双频，固件看不到这路 wifi。'
+        required: false
+        default: default
+        type: choice
+        options:
+          - default
+          - y
+          - n
 
 #CI权限
 permissions: write-all
@@ -66,3 +75,5 @@ jobs:
       WRT_PACKAGE: ${{inputs.PACKAGE}}
       #仅输出配置文件
       WRT_TEST: ${{inputs.TEST || false}}
+      #雅典娜 QCN9074。自动编译留空，改用配置文件开关。
+      WRT_ATHENA_QCN9074: ${{inputs.ATHENA_QCN9074 || ''}}
