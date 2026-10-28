@@ -9,8 +9,8 @@ UPDATE_PACKAGE() {
 	local PKG_BRANCH=$3
 	local PKG_SPECIAL=$4
 	local PKG_LIST=("$PKG_NAME" $5)  # 第5个参数为自定义名称列表
-	local REPO_NAME=${PKG_REPO#*/}
-	local REPO_PATH="./package/$REPO_NAME"
+	local PKG_DIR=${6:-${PKG_REPO#*/}}
+	local REPO_PATH="./package/$PKG_DIR"
 
 	echo " "
 
@@ -18,7 +18,7 @@ UPDATE_PACKAGE() {
 	for NAME in "${PKG_LIST[@]}"; do
 		# 查找匹配的目录
 		echo "Search directory: $NAME"
-		local FOUND_DIRS=$(find ./feeds/luci/ ./feeds/packages/ -maxdepth 3 -type d -iname "*$NAME*" 2>/dev/null)
+		local FOUND_DIRS=$(find ./feeds/luci/ ./feeds/packages/ ./package/feeds/ -maxdepth 4 \( -type d -o -type l \) -iname "*$NAME*" 2>/dev/null || true)
 
 		# 删除找到的目录
 		if [ -n "$FOUND_DIRS" ]; then
@@ -32,7 +32,7 @@ UPDATE_PACKAGE() {
 	done
 
 	# 克隆 GitHub 仓库
-	git clone --depth=1 --single-branch --branch $PKG_BRANCH "https://github.com/$PKG_REPO.git" $REPO_PATH
+	git clone --depth=1 --single-branch --branch "$PKG_BRANCH" "https://github.com/$PKG_REPO.git" "$REPO_PATH" || exit 1
 
 	# 处理克隆的仓库
 	if [[ "$PKG_SPECIAL" == "pkg" ]]; then
@@ -40,6 +40,53 @@ UPDATE_PACKAGE() {
 		rm -rf $REPO_PATH
 	fi
 }
+
+# OpenWrt 按最后一级目录名索引软件包，同名目录只保留 find 扫到的最后一个。
+# immortalwrt main 与 owrt 的 package/ 目录布局不同，扫描顺序不稳定。
+retain_package_source() {
+	local NAME=$1
+	local OWNER=$2
+	local MARKER=$3
+	local OWNER_ABS DIR ABS COUNT MAKEFILE
+
+	[ -d "$OWNER" ] || {
+		echo "Owned package directory is missing: $OWNER" >&2
+		exit 1
+	}
+	OWNER_ABS="$(CDPATH= cd -- "$OWNER" && pwd)"
+
+	while IFS= read -r DIR; do
+		[ -n "$DIR" ] || continue
+		[ -e "$DIR" ] || [ -L "$DIR" ] || continue
+		if [ -d "$DIR" ] && ABS="$(CDPATH= cd -- "$DIR" && pwd)" && [[ "$ABS" == "$OWNER_ABS"/* ]]; then
+			continue
+		fi
+		rm -rf "$DIR"
+		echo "Remove competing package: $DIR"
+	done < <(find ./package ./feeds -mindepth 1 -maxdepth 6 \( -type d -o -type l \) -iname "$NAME" 2>/dev/null || true)
+
+	MAKEFILE="$OWNER_ABS/$NAME/Makefile"
+	[ -f "$MAKEFILE" ] || {
+		echo "Owned $NAME Makefile is missing: $MAKEFILE" >&2
+		exit 1
+	}
+	if [ -n "$MARKER" ] && ! grep -F "$MARKER" "$MAKEFILE" >/dev/null; then
+		echo "$NAME Makefile does not come from the owned source: $MAKEFILE" >&2
+		exit 1
+	fi
+
+	COUNT="$(find ./package ./feeds -name Makefile -path "*/$NAME/Makefile" 2>/dev/null | wc -l | tr -d ' ')"
+	[ "$COUNT" = 1 ] || {
+		echo "Expected one $NAME Makefile, found $COUNT" >&2
+		find ./package ./feeds -name Makefile -path "*/$NAME/Makefile" >&2
+		exit 1
+	}
+	echo "Using $NAME from $MAKEFILE"
+}
+
+if [ "${PACKAGES_SH_SOURCE_ONLY:-0}" = 1 ]; then
+	return 0
+fi
 
 # 调用示例
 # UPDATE_PACKAGE "OpenAppFilter" "destan19/OpenAppFilter" "master" "" "custom_name1 custom_name2"
@@ -71,27 +118,14 @@ UPDATE_PACKAGE "netwizard" "sirpdboy/luci-app-netwizard" "main"
 UPDATE_PACKAGE "easytier" "EasyTier/luci-app-easytier" "main"
 UPDATE_PACKAGE "mosdns" "sbwml/luci-app-mosdns" "v5" "" "v2dat"
 UPDATE_PACKAGE "netspeedtest" "sirpdboy/netspeedtest" "main" "" "homebox ookla-speedtest"
-UPDATE_PACKAGE "netwizard" "sirpdboy/luci-app-netwizard" "main"
 UPDATE_PACKAGE "openlist2" "sbwml/luci-app-openlist2" "main"
 UPDATE_PACKAGE "partexp" "sirpdboy/luci-app-partexp" "main"
 UPDATE_PACKAGE "qbittorrent" "sbwml/luci-app-qbittorrent" "master" "" "qt6base qt6tools rblibtorrent"
 UPDATE_PACKAGE "qmodem" "FUjr/QModem" "main"
 UPDATE_PACKAGE "quickfile" "sbwml/luci-app-quickfile" "main"
-UPDATE_PACKAGE "welenwho" "welenwho/SBProxy" "main" "" "sing-box luci-app-sbproxy"
+UPDATE_PACKAGE "welenwho" "welenwho/packages" "main" "" "sing-box luci-app-sbproxy" "sbproxy"
 UPDATE_PACKAGE "viking" "VIKINGYFY/packages" "main" "" "axonhub gecoosac luci-app-timewol luci-app-wolplus luci-app-wolultra"
 UPDATE_PACKAGE "vnt" "lmq8267/luci-app-vnt" "main"
-
-UPDATE_PACKAGE "diskman" "sbwml/luci-app-diskman" "main"
-UPDATE_PACKAGE "mosdns" "sbwml/luci-app-mosdns" "v5" "" "v2dat"
-UPDATE_PACKAGE "openlist2" "sbwml/luci-app-openlist2" "main"
-UPDATE_PACKAGE "qbittorrent" "sbwml/luci-app-qbittorrent" "master" "" "qt6base qt6tools rblibtorrent"
-UPDATE_PACKAGE "quickfile" "sbwml/luci-app-quickfile" "main"
-
-UPDATE_PACKAGE "ddns-go" "sirpdboy/luci-app-ddns-go" "main"
-UPDATE_PACKAGE "netspeedtest" "sirpdboy/netspeedtest" "main" "" "homebox ookla-speedtest"
-UPDATE_PACKAGE "netwizard" "sirpdboy/luci-app-netwizard" "main"
-UPDATE_PACKAGE "partexp" "sirpdboy/luci-app-partexp" "main"
-UPDATE_PACKAGE "timecontrol" "sirpdboy/luci-app-timecontrol" "main"
 
 UPDATE_PACKAGE "natmapt" "muink/openwrt-natmapt" "master"
 UPDATE_PACKAGE "stuntman" "muink/openwrt-stuntman" "master"
@@ -153,3 +187,6 @@ UPDATE_VERSION() {
 if [ -f "$GITHUB_WORKSPACE/Scripts/PRIVATE.sh" ]; then
 	source "$GITHUB_WORKSPACE/Scripts/PRIVATE.sh"
 fi
+
+# VIKINGYFY/packages 整仓克隆会再次带入 sing-box。main/owrt 都必须只用 welenwho/packages 的核心。
+retain_package_source "sing-box" "./package/sbproxy" "https://github.com/welenwho/packages/releases/download/"

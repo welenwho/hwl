@@ -16,9 +16,39 @@ class BuildCleanupTests(unittest.TestCase):
         self.assertEqual(len(calls), len({tuple(call) for call in calls}))
         own = [call for call in calls if call[2] == 'welenwho/packages']
         self.assertEqual(len(own), 1)
-        self.assertEqual(own[0][5].split(), ['gecoosac', 'sing-box', 'luci-app-sbproxy', 'luci-app-wolultra'])
+        self.assertEqual(own[0][5].split(), ['sing-box', 'luci-app-sbproxy'])
+        self.assertEqual(own[0][6], 'sbproxy')
+        viking = next(call for call in calls if call[2] == 'VIKINGYFY/packages')
+        self.assertNotIn('sing-box', viking[5].split())
+        self.assertIn('retain_package_source "sing-box" "./package/sbproxy"', script)
         self.assertIn('UPDATE_VERSION()', script)
         self.assertIn('Scripts/PRIVATE.sh', script)
+
+    def test_retain_drops_viking_and_feed_sing_box(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            owner = base / 'package/sbproxy/sing-box'
+            owner.mkdir(parents=True)
+            marker = 'https://github.com/welenwho/packages/releases/download/'
+            (owner / 'Makefile').write_text('PKG_SOURCE_URL:=' + marker + 'sbproxy-core-v1.14.4\n')
+            viking = base / 'package/packages/sing-box'
+            viking.mkdir(parents=True)
+            (viking / 'Makefile').write_text('PKG_SOURCE_URL:=https://codeload.github.com/SagerNet/sing-box\n')
+            feed = base / 'feeds/packages/net/sing-box'
+            feed.mkdir(parents=True)
+            (feed / 'Makefile').write_text('PKG_SOURCE_URL:=https://codeload.github.com/SagerNet/sing-box\n')
+            installed = base / 'package/feeds/packages'
+            installed.mkdir(parents=True)
+            (installed / 'sing-box').symlink_to(feed)
+            env = dict(os.environ, PACKAGES_SH_SOURCE_ONLY='1')
+            command = 'source "%s"\nretain_package_source sing-box ./package/sbproxy "%s"\n' % (ROOT / 'Scripts/Packages.sh', marker)
+            result = subprocess.run(['bash', '-c', command], cwd=tmp, env=env, text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue((owner / 'Makefile').is_file())
+            self.assertFalse(viking.exists())
+            self.assertFalse(feed.exists())
+            self.assertFalse((installed / 'sing-box').exists())
+            self.assertIn('Using sing-box from', result.stdout)
 
     def test_configs_keep_current_proxy_and_wake_plugins(self):
         for name in ('GENERAL', 'TEST'):
