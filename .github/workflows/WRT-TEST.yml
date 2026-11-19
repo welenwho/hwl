@@ -10,19 +10,26 @@ on:
   workflow_dispatch:
     inputs:
       CONFIG:
-        default: 'MEDIATEK-WIFI-YES'
+        default: 'IPQ60XX-WIFI-YES-RE-SS-01'
         required: true
         type: choice
         options:
           - AIROHA-AN7581
           - AIROHA-AN7583
           - IPQ53XX
-          - IPQ53XX-WIFI-NO
-          - IPQ53XX-WIFI-NO
+          - IPQ60XX-WIFI-NO
           - IPQ60XX-WIFI-YES-RE-CS-02
           - IPQ60XX-WIFI-YES-RE-SS-01
+          - IPQ807X-WIFI-NO
+          - IPQ807X-WIFI-YES
+          - IPQ95XX
+          - MEDIATEK-WIFI-NO
+          - MEDIATEK-WIFI-YES
+          - ROCKCHIP
+          - X86
+          - TEST
       SOURCE:
-        default: 'VIKINGYFY/immortalwrt'
+        default: 'welenwho/wrt'
         required: true
         type: choice
         options:
@@ -40,6 +47,15 @@ on:
         default: true
         required: true
         type: boolean
+      ATHENA_QCN9074:
+        description: '雅典娜 5.2GHz QCN9074，只对 IPQ60XX-WIFI-YES-RE-CS-02 生效。default=按配置文件。y=三频。n=双频，固件看不到这路 wifi。'
+        required: false
+        default: default
+        type: choice
+        options:
+          - default
+          - y
+          - n
 
 #CI权限
 permissions: write-all
@@ -47,7 +63,7 @@ permissions: write-all
 #CI任务
 jobs:
   config:
-    name: ${{inputs.CONFIG}}
+    name: ${{inputs.CONFIG}}-${{inputs.BRANCH}}
     #调用公用编译核心WRT-CORE.yml
     uses: ./.github/workflows/WRT-CORE.yml
     with:
@@ -56,13 +72,13 @@ jobs:
       #默认主题
       WRT_THEME: vantage
       #默认主机名
-      WRT_NAME: OWRT
+      WRT_NAME: IPQWRT
       #默认WIFI名称
-      WRT_SSID: OWRT
+      WRT_SSID: who
       #默认WIFI密码
       WRT_WORD: 12345678
       #默认地址
-      WRT_IP: 192.168.10.1
+      WRT_IP: 192.168.4.1
       #默认密码，仅作提示，修改无用
       WRT_PW: 无
       #源码链接
@@ -75,3 +91,5 @@ jobs:
       WRT_PACKAGE: ${{inputs.PACKAGE}}
       #仅输出配置文件
       WRT_TEST: ${{inputs.TEST || false}}
+      #雅典娜 QCN9074
+      WRT_ATHENA_QCN9074: ${{inputs.ATHENA_QCN9074 || ''}}

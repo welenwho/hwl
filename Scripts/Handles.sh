@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: MIT
 # Copyright (C) 2026 VIKINGYFY
 
-
+FEEDS_PATH="./feeds"
+PACKAGE_PATH="./package"
 PKG_PATH="$GITHUB_WORKSPACE/wrt/package"
 
 PROJECT_ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"

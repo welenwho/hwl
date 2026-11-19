@@ -79,5 +79,29 @@ class BuildCleanupTests(unittest.TestCase):
             self.assertEqual(rust.read_text(), 'ci-llvm=true\n')
             self.assertNotIn('rust has been fixed', result.stdout)
 
+    def test_handles_fix_guards_find_cloned_packages(self):
+        # FIX 守卫目录为空时会静默跳过，这里确认每个修补都能找到 ./package 下的软件包。
+        fixes = {
+            'theme-argon': 'luci-theme-argon/luci-app-argon-config/root/etc/config/argon',
+            'theme-aurora': 'luci-app-aurora-config/root/usr/share/aurora/default.template',
+            'theme-vantage': 'luci-theme-vantage/luci-theme-vantage/htdocs/luci-static/vantage/vantage.css',
+            'natmapt': 'luci-app-natmapt/root/usr/share/luci/menu.d/luci-app-natmap.json',
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            wrt = Path(tmp) / 'wrt'
+            for target in fixes.values():
+                path = wrt / 'package' / target
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('{"admin/network/natmap": {}}\n')
+            env = dict(os.environ, GITHUB_WORKSPACE=tmp)
+            result = subprocess.run(['bash', str(ROOT / 'Scripts/Handles.sh')], cwd=wrt, env=env,
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            script = (ROOT / 'Scripts/Handles.sh').read_text()
+            for name in fixes:
+                self.assertIn('FIX "%s"' % name, script)
+                # macOS 的 BSD sed 会走到 "fix failed"，但两种输出都说明守卫目录找到了。
+                self.assertRegex(result.stdout, '%s (has been fixed!|fix failed; continuing!)' % name)
+
 
 if __name__ == '__main__': unittest.main()

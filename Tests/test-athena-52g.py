@@ -32,6 +32,20 @@ DTS_BODY = """
 };
 """
 DEVICE_PACKAGES = "CONFIG_TARGET_DEVICE_PACKAGES_qualcommax_ipq60xx_DEVICE_jdcloud_re-cs-02="
+IMAGE_MK = """
+define Device/jdcloud_re-cs-01
+	DEVICE_PACKAGES := ipq-wifi-jdcloud_re-cs-01
+endef
+
+define Device/jdcloud_re-cs-02
+	$(call Device/FitImage)
+	$(call Device/EmmcImage)
+	DEVICE_MODEL := RE-CS-02
+	DEVICE_PACKAGES := ipq-wifi-jdcloud_re-cs-02 ath11k-firmware-qcn9074-ddwrt luci-app-athena-led luci-i18n-athena-led-zh-cn
+	IMAGE/factory.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-rootfs | append-metadata
+endef
+TARGET_DEVICES += jdcloud_re-cs-02
+"""
 
 
 class Athena52gTests(unittest.TestCase):
@@ -41,6 +55,9 @@ class Athena52gTests(unittest.TestCase):
         (self.tree / "target/linux/qualcommax/dts").mkdir(parents=True)
         self.dts = self.tree / "target/linux/qualcommax/dts/ipq6010-re-cs-02.dts"
         self.dts.write_text(DTS_BODY)
+        (self.tree / "target/linux/qualcommax/image").mkdir(parents=True)
+        self.image_mk = self.tree / "target/linux/qualcommax/image/ipq60xx.mk"
+        self.image_mk.write_text(IMAGE_MK)
         self.config = self.tree / ".config"
         self.env = dict(os.environ, GITHUB_WORKSPACE=str(ROOT))
         self.env.pop("WRT_ATHENA_QCN9074", None)
@@ -111,6 +128,34 @@ class Athena52gTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('&pcie0 {\n\tstatus = "okay";', self.dts.read_text())
         self.assertIn("tri-band", result.stdout)
+
+    def test_device_packages_follow_image_makefile(self):
+        self.image_mk.write_text(IMAGE_MK.replace(
+            "luci-i18n-athena-led-zh-cn\n",
+            "luci-i18n-athena-led-zh-cn \\\n\t\tkmod-new-upstream\n",
+        ))
+        off = self.run_hook("IPQ60XX-WIFI-YES-RE-CS-02", "n")
+        self.assertEqual(off.returncode, 0, off.stdout + off.stderr)
+        self.assertEqual(
+            self.package_line(),
+            DEVICE_PACKAGES + '"ipq-wifi-jdcloud_re-cs-02 luci-app-athena-led luci-i18n-athena-led-zh-cn'
+            ' kmod-new-upstream -kmod-ath11k-pci -ath11k-firmware-qcn9074 -ath11k-firmware-qcn9074-ddwrt"',
+        )
+        on = self.run_hook("IPQ60XX-WIFI-YES-RE-CS-02", "y")
+        self.assertEqual(on.returncode, 0, on.stdout + on.stderr)
+        self.assertEqual(
+            self.package_line(),
+            DEVICE_PACKAGES + '"ipq-wifi-jdcloud_re-cs-02 ath11k-firmware-qcn9074-ddwrt luci-app-athena-led'
+            ' luci-i18n-athena-led-zh-cn kmod-new-upstream"',
+        )
+
+    def test_fails_when_device_is_missing_from_image_makefile(self):
+        self.image_mk.write_text(IMAGE_MK.replace("jdcloud_re-cs-02", "jdcloud_re-cs-09"))
+        result = self.run_hook("IPQ60XX-WIFI-YES-RE-CS-02", "n")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Device/jdcloud_re-cs-02", result.stderr)
+        self.assertFalse(self.config.exists())
+        self.assertEqual(self.dts.read_text(), DTS_BODY)
 
     def test_refuses_to_change_pcie_without_qcn9074(self):
         self.dts.write_text(DTS_BODY.replace('compatible = "pci17cb,1104";', 'compatible = "pci17cb,0000";'))

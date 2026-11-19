@@ -20,11 +20,17 @@ fi
 [ "${#manifests[@]}" -eq 1 ] || { echo 'Multiple SBProxy packages found; refusing an ambiguous preset target.' >&2; exit 1; }
 package_dir="$(CDPATH= cd -- "$(dirname -- "${manifests[0]}")" && pwd)"
 repository="${package_dir%/*}"
-resources="$package_dir/root/etc/sbproxy/resources"
-dashboard="$package_dir/root/etc/sbproxy/dashboard"
+data="$package_dir/root/etc/sbproxy"
+resources="$data/resources"
 updater="$repository/.github/scripts/update-sbproxy-geodata.sh"
 prepare="$repository/.github/scripts/prepare-rule-set-tool.sh"
-for target in "$resources" "$dashboard"; do
+# resources 和 dashboard 必须有；yacd、metacubexd 面板只在软件包自带时才一起更新。
+preset_dirs=(resources dashboard)
+for name in dashboard-yacd dashboard-metacubexd; do
+	[ ! -d "$data/$name" ] || preset_dirs+=("$name")
+done
+for name in "${preset_dirs[@]}"; do
+	target="$data/$name"
 	if [ -L "$target" ] || { [ -e "$target" ] && [ ! -d "$target" ]; }; then
 		echo "Unsafe preset directory type: $target" >&2
 		exit 1
@@ -55,8 +61,12 @@ fallback() {
 # Keep staging on the package filesystem so the final renames are atomic.
 temporary="$(mktemp -d "$package_dir/.preset.XXXXXX")"
 install_complete=0
+moved=()
+installed=()
 cleanup() {
-	if [ "$install_complete" = 0 ] && { [ -d "$temporary/old-resources" ] || [ -d "$temporary/old-dashboard" ]; }; then
+	local backup kept=0
+	for backup in "$temporary"/old-*; do [ ! -d "$backup" ] || kept=1; done
+	if [ "$install_complete" = 0 ] && [ "$kept" = 1 ]; then
 		echo "Preset backups retained for recovery: $temporary" >&2
 	else
 		rm -rf -- "$temporary"
@@ -66,9 +76,11 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 stage="$temporary/repository/luci-app-sbproxy/root/etc/sbproxy"
-mkdir -p "$stage/resources" "$stage/dashboard" "$temporary/tool-runtime"
-[ ! -d "$resources" ] || cp -a "$resources/." "$stage/resources/"
-[ ! -d "$dashboard" ] || cp -a "$dashboard/." "$stage/dashboard/"
+mkdir -p "$temporary/tool-runtime"
+for name in "${preset_dirs[@]}"; do
+	mkdir -p "$stage/$name"
+	[ ! -d "$data/$name" ] || cp -a "$data/$name/." "$stage/$name/"
+done
 
 validator="$(command -v "${SBP_SING_BOX:-${SING_BOX:-sing-box}}" 2>/dev/null || true)"
 validator_lib="${LD_LIBRARY_PATH:-}"
@@ -94,27 +106,35 @@ for resource in geoip_cn geosite_cn; do
 		LD_LIBRARY_PATH="$validator_lib" "$validator" rule-set decompile "$stage/resources/$resource.srs" -o /dev/null ||
 		fallback "Staged $resource failed final validation."
 done
-[ -s "$stage/dashboard/index.html" ] || fallback 'Staged dashboard is incomplete.'
+for name in "${preset_dirs[@]}"; do
+	case "$name" in
+		dashboard*) [ -s "$stage/$name/index.html" ] || fallback "Staged $name is incomplete." ;;
+	esac
+done
 
-mkdir -p "$(dirname "$resources")"
-had_resources=0
-had_dashboard=0
-if [ -d "$resources" ]; then mv "$resources" "$temporary/old-resources"; had_resources=1; fi
-if [ -d "$dashboard" ]; then
-	if ! mv "$dashboard" "$temporary/old-dashboard"; then
-		[ "$had_resources" = 0 ] || mv "$temporary/old-resources" "$resources"
+# 先把旧目录全部挪走再放入新目录，任何一步失败都整体回滚，不留半新半旧的预置数据。
+restore() {
+	local name
+	for name in ${installed[@]+"${installed[@]}"}; do rm -rf -- "${data:?}/$name"; done
+	for name in ${moved[@]+"${moved[@]}"}; do mv "$temporary/old-$name" "$data/$name"; done
+}
+mkdir -p "$data"
+for name in "${preset_dirs[@]}"; do
+	[ -d "$data/$name" ] || continue
+	if ! mv "$data/$name" "$temporary/old-$name"; then
+		restore
+		echo 'Failed to move SBProxy presets aside; original directories restored.' >&2
 		exit 1
 	fi
-	had_dashboard=1
-fi
-if mv "$stage/resources" "$resources" && mv "$stage/dashboard" "$dashboard"; then
-	install_complete=1
-	echo 'SBProxy unified GeoIP/GeoSite and dashboard presets updated from the shared package scripts.'
-	exit 0
-fi
-# Roll back both directories instead of leaving a half-updated preset bundle.
-rm -rf -- "$resources" "$dashboard"
-[ "$had_resources" = 0 ] || mv "$temporary/old-resources" "$resources"
-[ "$had_dashboard" = 0 ] || mv "$temporary/old-dashboard" "$dashboard"
-echo 'Failed to install SBProxy presets; original directories restored.' >&2
-exit 1
+	moved+=("$name")
+done
+for name in "${preset_dirs[@]}"; do
+	if ! mv "$stage/$name" "$data/$name"; then
+		restore
+		echo 'Failed to install SBProxy presets; original directories restored.' >&2
+		exit 1
+	fi
+	installed+=("$name")
+done
+install_complete=1
+echo "SBProxy presets updated from the shared package scripts: ${preset_dirs[*]}"

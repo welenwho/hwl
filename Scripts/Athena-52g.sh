@@ -33,6 +33,48 @@ case "$OVERRIDE" in
 		;;
 esac
 
+#设备包以源码 ipq60xx.mk 为准，只增删 QCN9074 相关的几项，上游加的包不会丢
+MK="./target/linux/qualcommax/image/ipq60xx.mk"
+[ -f "$MK" ] || {
+	echo "athena image makefile is missing: $MK" >&2
+	exit 1
+}
+DEVICE_PACKAGES=$(python3 - "$MK" "$MODE" <<'PY'
+import pathlib
+import re
+import sys
+
+mode = sys.argv[2]
+text = pathlib.Path(sys.argv[1]).read_text().replace("\\\n", " ")
+block = re.search(r"^define Device/jdcloud_re-cs-02[ \t]*\n(.*?)^endef", text, re.M | re.S)
+if not block:
+    raise SystemExit("missing Device/jdcloud_re-cs-02 in image makefile")
+
+packages = None
+for match in re.finditer(r"^[ \t]*DEVICE_PACKAGES[ \t]*(:=|\+=|=)(.*)$", block.group(1), re.M):
+    words = match.group(2).split()
+    packages = words if match.group(1) != "+=" or packages is None else packages + words
+if not packages:
+    raise SystemExit("Device/jdcloud_re-cs-02 has no DEVICE_PACKAGES")
+if any("$" in word for word in packages):
+    raise SystemExit("DEVICE_PACKAGES uses make variables: " + " ".join(packages))
+
+def qcn9074(word):
+    name = word.lstrip("-")
+    return name == "kmod-ath11k-pci" or name.startswith("ath11k-firmware-qcn9074")
+
+if mode == "y":
+    packages = [word for word in packages if not word.startswith("-") or not qcn9074(word)]
+    if not any(word.startswith("ath11k-firmware-qcn9074") for word in packages):
+        packages.append("ath11k-firmware-qcn9074-ddwrt")
+else:
+    packages = [word for word in packages if not qcn9074(word)]
+    packages += ["-kmod-ath11k-pci", "-ath11k-firmware-qcn9074", "-ath11k-firmware-qcn9074-ddwrt"]
+print(" ".join(packages))
+PY
+)
+LINE="CONFIG_TARGET_DEVICE_PACKAGES_qualcommax_ipq60xx_DEVICE_jdcloud_re-cs-02=\"${DEVICE_PACKAGES}\""
+
 DTS="./target/linux/qualcommax/dts/ipq6010-re-cs-02.dts"
 [ -f "$DTS" ] || {
 	echo "athena DTS is missing: $DTS" >&2
@@ -151,13 +193,6 @@ if own_status(text, "&wifi") != 'status = "okay";':
 path.write_text(text)
 PY
 
-PACKAGES='CONFIG_TARGET_DEVICE_PACKAGES_qualcommax_ipq60xx_DEVICE_jdcloud_re-cs-02='
-KEEP="ipq-wifi-jdcloud_re-cs-02 luci-app-athena-led luci-i18n-athena-led-zh-cn"
-if [ "$MODE" = "y" ]; then
-	LINE="${PACKAGES}\"${KEEP} ath11k-firmware-qcn9074-ddwrt\""
-else
-	LINE="${PACKAGES}\"${KEEP} -kmod-ath11k-pci -ath11k-firmware-qcn9074 -ath11k-firmware-qcn9074-ddwrt\""
-fi
 
 touch ./.config
 grep -v -E '^#?[[:space:]]*ATHENA_QCN9074=|^CONFIG_TARGET_DEVICE_PACKAGES_qualcommax_ipq60xx_DEVICE_jdcloud_re-cs-02=' ./.config > ./.config.athena-qcn9074 || true
