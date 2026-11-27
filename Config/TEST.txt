@@ -4,15 +4,15 @@ CONFIG_TARGET_qualcommax_ipq50xx=y
 #设备列表
 CONFIG_TARGET_DEVICE_qualcommax_ipq50xx_DEVICE_cmcc_mr3000d-ci=y
 #科学插件调整
-CONFIG_PACKAGE_luci-app-homeproxy=y
+CONFIG_PACKAGE_luci-app-sbproxy=y
 #增加插件
-CONFIG_PACKAGE_luci-app-autoreboot=y
+CONFIG_PACKAGE_luci-app-ddns-go=y
+CONFIG_PACKAGE_luci-app-diskman=y
 CONFIG_PACKAGE_luci-app-gecoosac=y
-CONFIG_PACKAGE_luci-app-mini-diskmanager=y
 CONFIG_PACKAGE_luci-app-natmapt=y
 CONFIG_PACKAGE_luci-app-partexp=y
-CONFIG_PACKAGE_luci-app-samba4=y
 CONFIG_PACKAGE_luci-app-upnp=y
+CONFIG_PACKAGE_luci-app-watchcat=y
 CONFIG_PACKAGE_luci-app-wolultra=y
 #删除插件
 CONFIG_PACKAGE_luci-app-attendedsysupgrade=n
@@ -52,7 +52,6 @@ CONFIG_PACKAGE_kmod-nft-netdev=y
 CONFIG_PACKAGE_kmod-nft-offload=y
 CONFIG_PACKAGE_kmod-nft-queue=y
 CONFIG_PACKAGE_kmod-nft-socket=y
-CONFIG_PACKAGE_kmod-nft-tproxy=y
 CONFIG_PACKAGE_kmod-nft-xfrm=y
 CONFIG_PACKAGE_kmod-nvme=y
 CONFIG_PACKAGE_kmod-ovpn-backports=y

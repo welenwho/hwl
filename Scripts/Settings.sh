@@ -14,9 +14,14 @@ find ./feeds/luci/modules/luci-mod-status/ -type f -name "10_system.js" -exec se
 #修改默认WIFI账号密码
 WIFI_UC="./package/network/config/wifi-scripts/files/lib/wifi/mac80211.uc"
 ROUTER_TOOL="./package/emortal/luci-app-router-tool/root/etc/config/router-tool"
-for file in "$ROUTER_TOOL" "$WIFI_UC"; do
-	[ -f "$file" ] && sed -i "s/ssid '.*'/ssid '$WRT_SSID'/g; s/key '.*'/key '$WRT_WORD'/g" "$file"
-done
+if [ -f "$ROUTER_TOOL" ]; then
+	#owrt：router-tool 首次启动时把 OWRT/12345678 的出厂 WIFI 改成这里的名称，mac80211.uc 不能改
+	sed -i "s/ssid '.*'/ssid '$WRT_SSID'/g; s/key '.*'/key '$WRT_WORD'/g" "$ROUTER_TOOL"
+elif [ -f "$WIFI_UC" ]; then
+	#main：没有 router-tool，改 mac80211.uc 里的兜底值，board.json 自带的默认值仍然优先
+	sed -i "s/\(ssid || \)'[^']*'/\1'$WRT_SSID'/; s/\(key || \)'[^']*'/\1'$WRT_WORD'/" "$WIFI_UC"
+	grep -qF "ssid || '$WRT_SSID'" "$WIFI_UC" || echo "::warning::mac80211.uc 格式已变，默认WIFI名称未修改"
+fi
 
 CFG_FILE="./package/base-files/files/bin/config_generate"
 #修改默认IP地址
@@ -50,4 +55,14 @@ if [[ "${WRT_TARGET^^}" == *"QUALCOMMAX"* ]]; then
 		find $DTS_PATH -type f ! -iname '*nowifi*' -exec sed -i 's/ipq\(6018\|8074\).dtsi/ipq\1-nowifi.dtsi/g' {} +
 		echo "qualcommax set up nowifi successfully!"
 	fi
+fi
+
+#雅典娜 QCN9074 开关：配置文件 ATHENA_QCN9074，编译时可用 WRT_ATHENA_QCN9074 覆盖
+if [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/Scripts/Athena-52g.sh" ]; then
+	bash "$GITHUB_WORKSPACE/Scripts/Athena-52g.sh"
+fi
+
+#Redmi AX6 精简：只去掉 AX6 / AX6 stock 用不上的 USB、磁盘、文件系统等包，其他机型不变
+if [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/Scripts/AX6-Slim.sh" ]; then
+	bash "$GITHUB_WORKSPACE/Scripts/AX6-Slim.sh"
 fi
